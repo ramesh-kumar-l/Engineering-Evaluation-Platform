@@ -41,8 +41,12 @@ small, zero-cost pilot whose result is deliberately reported as *statistically i
 weak model, overlapping confidence intervals); it validates the live pipeline end-to-end rather than
 answering whether ECC helps.
 
-Not yet done: a *powered* comparison — more repetitions, a stronger model so the native baseline can
-solve enough tasks to be discriminating, and more real fixtures beyond the current 3. See
+The runnable fixture set has since been widened from 3 to **8 fixtures across 6 categories**
+(debugging, feature, refactoring, performance, migration, test-generation), which makes EEP's
+per-category / per-complexity analysis meaningful; that widened comparison has not yet been rerun.
+Not yet done: a *powered* comparison — more repetitions and, above all, a stronger model so the
+native baseline can solve enough tasks to be discriminating (the binding constraint is model
+strength, not fixture count). See
 [`project-memory-bank/20-next-actions.md`](project-memory-bank/20-next-actions.md) for the full
 backlog.
 
@@ -63,7 +67,7 @@ walkthrough — setup, project structure, glossary, and common questions a first
 
 ## Golden examples
 
-Two of the three real-fixture benchmark tasks, each with a full design walkthrough — what makes the
+Two of the runnable benchmark fixtures, each with a full design walkthrough — what makes the
 task a good test, what a context-free attempt is likely to get wrong, and how verification judges
 it:
 

@@ -1,0 +1,8 @@
+{
+  "name": "eep-fixture-refactoring-02",
+  "private": true,
+  "description": "Self-hosted benchmark fixture for benchmark/tasks/refactoring-02.json.",
+  "scripts": {
+    "test": "node dataStore.test.js"
+  }
+}

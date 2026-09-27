@@ -1,0 +1,8 @@
+{
+  "name": "eep-fixture-feature-02",
+  "private": true,
+  "description": "Self-hosted benchmark fixture for benchmark/tasks/feature-02.json.",
+  "scripts": {
+    "test": "node rateLimiter.test.js"
+  }
+}

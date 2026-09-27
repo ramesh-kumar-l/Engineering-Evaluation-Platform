@@ -1,0 +1,8 @@
+{
+  "name": "eep-fixture-migration-01",
+  "private": true,
+  "description": "Self-hosted benchmark fixture for benchmark/tasks/migration-01.json.",
+  "scripts": {
+    "test": "node calc.test.mjs"
+  }
+}

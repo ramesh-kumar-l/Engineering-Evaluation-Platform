@@ -1,0 +1,8 @@
+{
+  "name": "eep-fixture-test-generation-01",
+  "private": true,
+  "description": "Self-hosted benchmark fixture for benchmark/tasks/test-generation-01.json.",
+  "scripts": {
+    "test": "node dateUtil.test.js"
+  }
+}

@@ -83,10 +83,19 @@ truth) is separate from having a real, runnable fixture repository behind it. As
 
 | Task | Fixture status |
 |---|---|
-| `debugging-01` | Real fixture, pinned commit SHA |
-| `feature-01` | Real fixture, pinned commit SHA |
-| `refactoring-01` | Real fixture, pinned commit SHA |
-| Remaining 27 tasks | Task definition only — fixture source code not yet authored |
+| `debugging-01`, `feature-01`, `refactoring-01` | Real fixture, pinned commit SHA |
+| `performance-01`, `feature-02`, `refactoring-02`, `migration-01`, `test-generation-01` | Real fixture, self-verifying `npm test`; commit SHA not yet pinned |
+| Remaining 22 tasks | Task definition only — fixture source code not yet authored |
+
+The runnable set was widened from 3 to **8 fixtures across 6 categories** (debugging, feature,
+refactoring, performance, migration, test-generation). Each new fixture is deterministic and
+offline, and its own `npm test` is the pass/fail gate (EEP has no separate repository-invariant
+verifier, so any invariant — e.g. `migration-01`'s "no CommonJS left in `src/`" — is asserted
+inside the test). `test-generation-01` is included for category coverage but is a weak *success*
+discriminator, because the agent authors the very tests the verifier runs — noted plainly in that
+fixture's README. The **[First results (pilot)](#first-results-pilot)** above were measured on the
+original 3 fixtures; a rerun over the widened set has not yet been executed (see
+[Current status](#current-status)).
 
 Fixtures are self-hosted inside this repository under `benchmark/fixtures/<id>/` — never an
 external GitHub repository — specifically to avoid benchmark contamination (well-known public code
@@ -165,7 +174,12 @@ answering whether ECC helps.
 
 Still to do for a *powered* result: (1) more repetitions per task for tighter confidence intervals;
 (2) a stronger model (a capable hosted LLM, or a larger local one) so the native baseline can solve
-enough tasks to make the comparison discriminating; (3) more real fixtures beyond the current 3.
+enough tasks to make the comparison discriminating; (3) a rerun over the widened fixture set — the
+runnable set has grown from 3 to 8 fixtures across 6 categories (see [Fixture status](#fixture-status)),
+which makes the per-category / per-complexity analysis (now printed by `npm run experiment:analyze`)
+meaningful rather than one fixture per slice, but that widened rerun has not yet been executed. The
+binding constraint remains the model strength, not the fixture count — more fixtures on the same 7B
+model would very likely stay inconclusive.
 
 The mechanism remains fully reproducible without any spend via the free, deterministic "smoke
 reproduction" (`npm run reproduce:smoke` — see

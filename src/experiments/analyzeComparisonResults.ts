@@ -3,7 +3,7 @@ import type { RunAnalysisRecord } from '../analysis/analysisInput.js';
 import { analyzeComponentContributions, type ComponentContribution } from '../analysis/componentContribution.js';
 import type { RunVerificationRecord } from '../analysis/failureAnalysisInput.js';
 import { analyzeFailureClusters, type FailureClusterReport } from '../analysis/failureClustering.js';
-import { analyzeRepeatedRuns, type RepeatedRunAnalysisReport } from '../analysis/groupedAnalysis.js';
+import { analyzeRepeatedRuns, type DimensionAnalysis, type RepeatedRunAnalysisReport } from '../analysis/groupedAnalysis.js';
 import type { ConfidenceLevel } from '../analysis/tDistribution.js';
 import type { ExperimentId } from '../domain/common/ids.js';
 import { PRIMARY_METRIC_NAMES, type MetricName } from '../domain/metric/metric.schema.js';
@@ -77,26 +77,49 @@ export async function analyzeComparisonResults(
   return { experimentId: id, runCount: bundles.length, repeatedRunReport, componentReports, failureClusterReport };
 }
 
+/** Human label for one analysis slice, e.g. `overall`, `category=debugging`, `complexity=L3`. */
+function sliceLabel(slice: DimensionAnalysis): string {
+  return slice.dimension === 'overall' ? 'overall' : `${slice.dimension}=${slice.dimensionValue}`;
+}
+
+/** Prints one metric's per-condition CIs and baseline-vs-condition effect sizes for a single slice. */
+function printRepeatedRunSlice(slice: DimensionAnalysis): void {
+  console.log(`\nMetric: ${slice.metricName} (${sliceLabel(slice)})`);
+  for (const summary of slice.summariesByCondition) {
+    console.log(
+      summary.status === 'ok'
+        ? `  ${summary.conditionName}: n=${String(summary.n)} mean=${summary.mean.toFixed(3)} CI=[${summary.confidenceInterval.lower.toFixed(3)}, ${summary.confidenceInterval.upper.toFixed(3)}]`
+        : `  ${summary.conditionName}: insufficient data (${summary.reason})`,
+    );
+  }
+  for (const comparison of slice.comparisons) {
+    console.log(
+      comparison.status === 'ok'
+        ? `  ${comparison.baselineCondition} vs ${comparison.treatmentCondition}: meanDiff=${comparison.meanDifference.toFixed(3)} effectSize=${comparison.effectSize.value.toFixed(3)} (${comparison.effectSize.magnitude})`
+        : `  ${comparison.baselineCondition} vs ${comparison.treatmentCondition}: insufficient data (${comparison.reason})`,
+    );
+  }
+}
+
 function printComparisonAnalysisResult(result: ComparisonAnalysisResult): void {
   console.log(`\n=== Comparison analysis: experiment ${result.experimentId} (${String(result.runCount)} runs) ===`);
 
   console.log(`\n--- Repeated-run analysis (baseline: ${BASELINE_CONDITION_NAME}) ---`);
   for (const slice of result.repeatedRunReport.overall) {
-    console.log(`\nMetric: ${slice.metricName} (overall)`);
-    for (const summary of slice.summariesByCondition) {
-      console.log(
-        summary.status === 'ok'
-          ? `  ${summary.conditionName}: n=${String(summary.n)} mean=${summary.mean.toFixed(3)} CI=[${summary.confidenceInterval.lower.toFixed(3)}, ${summary.confidenceInterval.upper.toFixed(3)}]`
-          : `  ${summary.conditionName}: insufficient data (${summary.reason})`,
-      );
-    }
-    for (const comparison of slice.comparisons) {
-      console.log(
-        comparison.status === 'ok'
-          ? `  ${comparison.baselineCondition} vs ${comparison.treatmentCondition}: meanDiff=${comparison.meanDifference.toFixed(3)} effectSize=${comparison.effectSize.value.toFixed(3)} (${comparison.effectSize.magnitude})`
-          : `  ${comparison.baselineCondition} vs ${comparison.treatmentCondition}: insufficient data (${comparison.reason})`,
-      );
-    }
+    printRepeatedRunSlice(slice);
+  }
+
+  // The per-category / per-complexity slices are computed by analyzeRepeatedRuns() but were not
+  // previously printed; they only become meaningful once several fixtures share a category or
+  // complexity level (with a single fixture per slice each is n=1 and reports insufficient data).
+  console.log(`\n--- Repeated-run analysis by category (baseline: ${BASELINE_CONDITION_NAME}) ---`);
+  for (const slice of result.repeatedRunReport.byCategory) {
+    printRepeatedRunSlice(slice);
+  }
+
+  console.log(`\n--- Repeated-run analysis by complexity (baseline: ${BASELINE_CONDITION_NAME}) ---`);
+  for (const slice of result.repeatedRunReport.byComplexity) {
+    printRepeatedRunSlice(slice);
   }
 
   console.log(`\n--- Component ablation analysis (full: ${FULL_ECC_CONDITION_NAME}) ---`);
