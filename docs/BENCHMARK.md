@@ -1,53 +1,76 @@
 # The EEP Benchmark
 
-**A first live comparison run has now been executed — see [First results (pilot)](#first-results-pilot)
-below.** It is a deliberately small, local, zero-cost pilot (a 7B local model over the 3
-real-fixture tasks), and its headline finding is that *the result is statistically inconclusive at
-this sample size and model strength* — reported here exactly as measured. This document describes
-the benchmark's *design* and the pilot. Remaining artifacts that are not live results — e.g.
+**A live comparison has now been run over the full 8-fixture set — see
+[First results (widened live comparison)](#first-results-widened-live-comparison) below.** It is a
+local, zero-cost run (a 7B local model, `native` vs full `ecc`, 3 repetitions across all 8 runnable
+fixtures — 48 runs), and its headline finding is that *the result is statistically inconclusive at
+this model strength* — reported here exactly as measured. This document describes the benchmark's
+*design* and this result. Remaining artifacts that are not live results — e.g.
 [`docs/sample-dashboard.html`](sample-dashboard.html) — stay explicitly labeled as synthetic demos.
 See [REPRODUCING.md](REPRODUCING.md) to run it yourself.
 
-## First results (pilot)
+## First results (widened live comparison)
 
 *Run 2026-09-27. Backend: `qwen2.5-coder:7b` via a local Ollama OpenAI-compatible endpoint (free,
-offline). Scope: the 3 real-fixture tasks, `native` vs full `ecc`, 1 repetition each (n = 3 runs
-per condition). This is a pilot to validate the live pipeline end-to-end, **not** a powered
-comparison.*
+offline). Scope: all **8 real-fixture tasks**, `native` vs full `ecc`, **3 repetitions each** —
+**48 runs** (n = 24 per condition). This supersedes the earlier n = 3, 3-fixture pilot; it widens
+coverage across categories and complexity levels, but — as predicted — it does **not** make the
+comparison conclusive, because the binding constraint is model strength, not fixture count.*
 
-**Per-run outcomes:**
+**Per-fixture task success (successes / 3 repetitions):**
 
-| Task | `native` | `ecc` |
-|---|---|---|
-| `debugging-01` (L1) | ✅ success | ❌ failure |
-| `feature-01` | ❌ failure | ❌ failure |
-| `refactoring-01` | ❌ failure | ❌ failure |
+| Fixture | Complexity | `native` | `ecc` |
+|---|---|---|---|
+| `debugging-01` | L1 | 1/3 | 1/3 |
+| `test-generation-01` | L1 | 0/3 | 0/3 |
+| `refactoring-01` | L2 | 1/3 | 0/3 |
+| `refactoring-02` | L2 | 0/3 | 0/3 |
+| `feature-01` | L3 | 0/3 | 0/3 |
+| `feature-02` | L3 | 0/3 | 0/3 |
+| `migration-01` | L3 | 0/3 | 0/3 |
+| `performance-01` | L3 | 0/3 | 0/3 |
+| **Total** | | **2/24** | **1/24** |
 
-**Aggregate (95% confidence intervals, baseline = `native`):**
+Across all 48 runs the model produced **3 verified successes**: `debugging-01` (once each arm) and
+`refactoring-01` (native only). Every other run failed verification (or, in two cases, timed out).
 
-| Metric | `native` (n=3) | `ecc` (n=3) | Mean diff | Effect size |
+**Aggregate — primary metrics (95% confidence intervals, baseline = `native`):**
+
+| Metric | `native` (n=24) | `ecc` (n=24) | Mean diff | Effect size |
 |---|---|---|---|---|
-| task-success | 0.333 `[0.061, 0.792]` | 0.000 `[0.000, 0.561]` | −0.333 | −1.23 (large) |
-| context-efficiency (success/1k tokens) | 2.80 | 0.00 | −2.80 | −0.82 (large) |
+| task-success | 0.083 `[0.023, 0.258]` | 0.042 `[0.007, 0.202]` | −0.042 | −0.18 (negligible) |
+| engineering-quality | 0.125 `[−0.003, 0.253]` | 0.104 `[−0.003, 0.212]` | −0.021 | −0.07 (negligible) |
+| time-to-correct-outcome (ms) | 95,273 | 99,895 | +4,622 | 0.06 (negligible) |
+| context-efficiency (success/1k tok) | 0.622 `[−0.276, 1.521]` | 0.116 `[−0.124, 0.355]` | −0.507 | −0.33 (small) |
+| human-intervention | 0.000 | 0.000 | 0.000 | 0.00 |
 
-**Interpretation — read this carefully, because the effect-size labels are misleading on their own:**
+**Interpretation — read this carefully, because the per-slice effect-size labels mislead on their own:**
 
-1. **The comparison is statistically inconclusive.** Although the effect sizes are nominally
-   "large," the task-success confidence intervals overlap substantially (`native` `[0.061, 0.792]`
-   vs `ecc` `[0.000, 0.561]`). At n = 3 with a weak model, no reliable native-vs-ECC conclusion can
-   be drawn — and the platform reports it as such rather than headlining the effect size.
-2. **The model is the binding constraint, not ECC.** A 7B local model solved at most 1 of 3 tasks.
-   With a ceiling that low the experiment cannot discriminate context quality either way; ECC's
-   value is expected to appear on harder tasks that the native baseline *cannot* solve unaided.
-3. **Run-to-run nondeterminism is real and large.** An earlier isolated single run had `ecc`
-   *pass* `debugging-01`; this run had `ecc` *fail* the same task under identical configuration.
-   Same task, same condition, opposite outcome — which is precisely why this benchmark's design
-   centers on repetitions and confidence intervals rather than single runs.
+1. **The comparison is statistically inconclusive.** The overall task-success effect is *negligible*
+   and the confidence intervals overlap almost entirely (`native` `[0.023, 0.258]` vs `ecc`
+   `[0.007, 0.202]`). No reliable native-vs-ECC conclusion can be drawn.
+2. **The direction is not even stable, which is itself the finding.** This full 8-fixture run
+   nominally favors `native` on task-success; an earlier partial 6-fixture batch nominally favored
+   `ecc`. When the sign of a "difference" flips between runs, the honest reading is that there is no
+   signal at this sample size and model strength — only noise. It is exactly why this benchmark is
+   built on repetitions and confidence intervals rather than single numbers.
+3. **The model is the binding constraint, not ECC.** 3 verified successes out of 48 runs, and
+   **0 of 24 L3 runs** succeeded under either arm (the L3 test-suite failure rate is 23/23 = 100%).
+   With a ceiling this low the experiment cannot discriminate context quality either way; ECC's
+   value is expected to appear on harder tasks a *stronger* baseline can begin to solve.
+4. **Do not cherry-pick the per-category "large" effects.** Some slices show nominally "large"
+   effects in *both* directions — e.g. task-success favors `native` on refactoring (0.167 vs 0.000),
+   while time-to-correct-outcome favors `ecc` on refactoring/performance/L3 but favors `native`
+   massively on test-generation (a single `ecc` timeout dominates a 3-run slice). These are n = 3–6
+   slices with wide, overlapping intervals; they are texture, not conclusions. The one honest,
+   still-caveated observation is that `ecc` *tended* to reach its outcome faster on the harder
+   slices — worth a powered re-test, not a claim.
 
-**What this pilot does and does not establish.** It establishes that the full live pipeline
-(harness → real LLM agent → deterministic verification → metrics → statistics) runs end-to-end
-against a real model and produces traceable, honestly-reported numbers. It does **not** establish
-whether ECC improves outcomes; that requires more repetitions and a stronger model (see
+**What this run does and does not establish.** It establishes that the full live pipeline
+(harness → real LLM agent → deterministic verification → metrics → statistics) runs end-to-end over
+the widened benchmark and that the per-category / per-complexity analysis is populated and
+meaningful (not one fixture per slice). It does **not** establish whether ECC improves outcomes;
+that requires a stronger model so the baseline can solve enough tasks to be discriminating (see
 [Current status](#current-status)).
 
 ## What this measures
@@ -93,9 +116,10 @@ offline, and its own `npm test` is the pass/fail gate (EEP has no separate repos
 verifier, so any invariant — e.g. `migration-01`'s "no CommonJS left in `src/`" — is asserted
 inside the test). `test-generation-01` is included for category coverage but is a weak *success*
 discriminator, because the agent authors the very tests the verifier runs — noted plainly in that
-fixture's README. The **[First results (pilot)](#first-results-pilot)** above were measured on the
-original 3 fixtures; a rerun over the widened set has not yet been executed (see
-[Current status](#current-status)).
+fixture's README. The **[First results (widened live comparison)](#first-results-widened-live-comparison)**
+above were measured over all 8 fixtures (48 runs); the `test-generation-01` runs behaved as that
+caveat predicts (both arms failed verification, one `ecc` run timed out) and add little success
+signal.
 
 Fixtures are self-hosted inside this repository under `benchmark/fixtures/<id>/` — never an
 external GitHub repository — specifically to avoid benchmark contamination (well-known public code
@@ -167,19 +191,27 @@ with no shared code — EEP never modifies ECC's source or behavior to influence
 
 ## Current status
 
-A first **live** pilot has been run against a real model (local `qwen2.5-coder:7b`) — see
-[First results (pilot)](#first-results-pilot). It is intentionally small (3 tasks, n = 3 per
-condition) and its outcome is statistically inconclusive; it validates the live pipeline rather than
-answering whether ECC helps.
+A **live** comparison has been run against a real model (local `qwen2.5-coder:7b`) over the full
+widened fixture set — see
+[First results (widened live comparison)](#first-results-widened-live-comparison): 8 fixtures,
+`native` vs `ecc`, 3 repetitions (48 runs). Its outcome is statistically inconclusive and the
+direction is unstable across runs; it validates the live pipeline and the per-category /
+per-complexity analysis surface rather than answering whether ECC helps.
 
-Still to do for a *powered* result: (1) more repetitions per task for tighter confidence intervals;
-(2) a stronger model (a capable hosted LLM, or a larger local one) so the native baseline can solve
-enough tasks to make the comparison discriminating; (3) a rerun over the widened fixture set — the
-runnable set has grown from 3 to 8 fixtures across 6 categories (see [Fixture status](#fixture-status)),
-which makes the per-category / per-complexity analysis (now printed by `npm run experiment:analyze`)
-meaningful rather than one fixture per slice, but that widened rerun has not yet been executed. The
-binding constraint remains the model strength, not the fixture count — more fixtures on the same 7B
-model would very likely stay inconclusive.
+Still to do for a *powered* result: (1) **a stronger model** (a capable hosted LLM, or a larger
+local one) so the native baseline can solve enough tasks to make the comparison discriminating —
+**this is the binding constraint**, confirmed by the widened run (0 of 24 L3 runs succeeded under
+either arm); (2) more repetitions per task for tighter confidence intervals. Widening the fixture
+set from 3 to 8 has already been done and, as predicted, did not by itself make the result
+conclusive — more fixtures on the same 7B model stay inconclusive.
+
+**Harness robustness (why this 48-run batch completed):** an earlier attempt at this same run
+aborted mid-batch when the weak model emitted a malformed action the `Trace` schema rejected, whose
+`parse` runs outside the agent's own try/catch. The experiment loop now (a) maps an empty tool-path
+argument to a targetless action rather than a schema-invalid empty string, and (b) isolates each
+`(task, condition, rep)` case so an unexpected throw is logged and counted (`failedCaseCount`) and
+the remaining cases still run — one bad run can no longer discard the whole batch. This run reported
+`failedCaseCount = 0`.
 
 The mechanism remains fully reproducible without any spend via the free, deterministic "smoke
 reproduction" (`npm run reproduce:smoke` — see

@@ -212,7 +212,15 @@ export class LlmSolvingAgent implements Agent {
           id: generateId<'ActionId'>('action'),
           runId: request.runId,
           type: actionTypeForTool(call.name),
-          target: typeof call.arguments.path === 'string' ? call.arguments.path : undefined,
+          // An empty (or missing) `path` argument means "no target": map it to `undefined`, never
+          // the empty string. `actionSchema.target` is `z.string().min(1).optional()`, so an empty
+          // string would fail validation in `runHarness.ts`'s `traceSchema.parse` — which runs
+          // *outside* that module's agent try/catch and would abort the whole experiment batch. A
+          // weak model emitting `{"path":""}` is exactly the case that surfaced this.
+          target:
+            typeof call.arguments.path === 'string' && call.arguments.path.length > 0
+              ? call.arguments.path
+              : undefined,
           detail: result.slice(0, ACTION_DETAIL_MAX_CHARS),
           timestamp,
         });

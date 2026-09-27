@@ -2,6 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { actionSchema } from '../../domain/trace/action.schema.js';
 import type { Task } from '../../domain/task/task.schema.js';
 import type { LlmClient, LlmCompletionRequest, LlmCompletionResult } from '../llm/llmClient.types.js';
 import { LlmSolvingAgent } from './llmSolvingAgent.js';
@@ -103,6 +104,24 @@ describe('LlmSolvingAgent', () => {
       content: '',
       toolCalls: [{ name: 'read_file', arguments: { path: 'a.js' } }],
     });
+  });
+
+  it('records a tool call with an empty path as a targetless, schema-valid Action (never target:"")', async () => {
+    // A weak model emitting {"path":""} must not produce an Action with target:"" — that fails
+    // actionSchema (target is .min(1).optional()) later in runHarness.ts's traceSchema.parse,
+    // outside its agent try/catch, which previously aborted the whole experiment batch.
+    const client = new ScriptedLlmClient([
+      { role: 'assistant', content: '', toolCalls: [{ id: 'c1', name: 'read_file', arguments: { path: '' } }] },
+      { role: 'assistant', content: 'Done.', toolCalls: [] },
+    ]);
+    const agent = new LlmSolvingAgent({ client });
+    const result = await agent.run({ runId: 'run-1', task, repositoryPath: freshWorkspace() });
+
+    expect(result.status).toBe('SUCCESS');
+    expect(result.actions).toHaveLength(1);
+    expect(result.actions[0]?.target).toBeUndefined();
+    // The Action must survive schema validation — this is the exact parse that used to crash.
+    expect(() => result.actions.map((action) => actionSchema.parse(action))).not.toThrow();
   });
 
   it('reports INCOMPLETE when the max-turn budget is exhausted without concluding', async () => {

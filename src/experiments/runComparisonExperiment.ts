@@ -46,7 +46,47 @@ export interface RunComparisonExperimentOptions {
 
 export interface RunComparisonExperimentResult {
   readonly experimentId: ExperimentId;
+  /** Number of cases that ran to completion and were written to disk. */
   readonly runCount: number;
+  /**
+   * Number of cases that threw an unexpected error and were skipped (logged, batch continued). A
+   * healthy run is 0; a non-zero count means some `(task, condition, rep)` cases were lost but the
+   * rest of the comparison still completed — see `runCasesResiliently`.
+   */
+  readonly failedCaseCount: number;
+}
+
+/** One planned `(task, condition, rep)` case: a human-readable label plus the thunk that runs it. */
+interface PlannedCase {
+  readonly label: string;
+  readonly run: () => Promise<void>;
+}
+
+/**
+ * Runs every planned case, isolating failures: a throw in one case is handed to `onError` and
+ * counted, and the remaining cases still run. This is the batch-robustness guard — before it, a
+ * single malformed run (e.g. a weak model emitting an action the Trace schema rejects, which throws
+ * from `runHarness.ts`'s `traceSchema.parse`, *outside* that module's agent try/catch) aborted the
+ * entire experiment and discarded every not-yet-run case. Expected per-run failure modes are still
+ * recorded as an explicit `RunStatus` upstream (see `runHarness.ts`); this only catches the
+ * genuinely unexpected so one bad case cannot cost the whole batch.
+ */
+export async function runCasesResiliently(
+  cases: readonly PlannedCase[],
+  onError: (label: string, error: unknown) => void,
+): Promise<{ readonly succeeded: number; readonly failed: number }> {
+  let succeeded = 0;
+  let failed = 0;
+  for (const planned of cases) {
+    try {
+      await planned.run();
+      succeeded++;
+    } catch (error) {
+      failed++;
+      onError(planned.label, error);
+    }
+  }
+  return { succeeded, failed };
 }
 
 /**
@@ -81,17 +121,27 @@ export async function runComparisonExperiment(
   );
   const experimentId = generateId<'ExperimentId'>('experiment');
 
-  let runCount = 0;
+  const cases: PlannedCase[] = [];
   for (const task of tasks) {
     for (const entry of conditions) {
       for (let rep = 0; rep < repetitions; rep++) {
-        await runOneEvaluatedCase(task, entry, agent, experimentId, environment, options.resultsDir);
-        runCount++;
+        const label = `task=${task.id} condition=${entry.condition.name} rep=${String(rep + 1)}/${String(repetitions)}`;
+        cases.push({
+          label,
+          run: () =>
+            runOneEvaluatedCase(task, entry, agent, experimentId, environment, options.resultsDir),
+        });
       }
     }
   }
 
-  return { experimentId, runCount };
+  const { succeeded, failed } = await runCasesResiliently(cases, (label, error) => {
+    console.error(
+      `Run failed and was skipped (${label}): ${error instanceof Error ? error.message : String(error)}`,
+    );
+  });
+
+  return { experimentId, runCount: succeeded, failedCaseCount: failed };
 }
 
 /**
@@ -169,8 +219,11 @@ async function runOneEvaluatedCase(
 const isMainModule = process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMainModule) {
   runComparisonExperiment(experimentSelectionFromEnv())
-    .then(({ experimentId, runCount }) => {
+    .then(({ experimentId, runCount, failedCaseCount }) => {
       console.log(`Wrote ${String(runCount)} run(s) for experiment ${experimentId} to experiment-results/${experimentId}/`);
+      if (failedCaseCount > 0) {
+        console.warn(`${String(failedCaseCount)} case(s) failed unexpectedly and were skipped (see errors above); the rest of the batch completed.`);
+      }
     })
     .catch((error: unknown) => {
       console.error(error);

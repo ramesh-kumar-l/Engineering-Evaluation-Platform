@@ -35,18 +35,20 @@ newbie quickstart guide, two "golden example" benchmark-task deep-dives, and a 5
 (see [Requirements and quickstart](#requirements-and-quickstart),
 [Golden examples](#golden-examples), and [Blog series](#blog-series) below).
 
-A first **live** comparison pilot has now been run (local `qwen2.5-coder:7b`, `native` vs `ecc` over
-the 3 real-fixture tasks) — see [`docs/BENCHMARK.md`](docs/BENCHMARK.md#first-results-pilot). It is a
-small, zero-cost pilot whose result is deliberately reported as *statistically inconclusive* (n = 3,
-weak model, overlapping confidence intervals); it validates the live pipeline end-to-end rather than
-answering whether ECC helps.
+A **live** comparison has now been run over the full widened fixture set (local `qwen2.5-coder:7b`,
+`native` vs `ecc` over all **8 real-fixture tasks**, 3 repetitions — 48 runs) — see
+[`docs/BENCHMARK.md`](docs/BENCHMARK.md#first-results-widened-live-comparison). Its result is
+deliberately reported as *statistically inconclusive* (negligible overall effect, overlapping
+confidence intervals, and a direction that flips between runs); it validates the live pipeline
+end-to-end and the per-category analysis surface rather than answering whether ECC helps. This
+supersedes the earlier n = 3, 3-fixture pilot.
 
-The runnable fixture set has since been widened from 3 to **8 fixtures across 6 categories**
-(debugging, feature, refactoring, performance, migration, test-generation), which makes EEP's
-per-category / per-complexity analysis meaningful; that widened comparison has not yet been rerun.
+Widening the runnable set from 3 to **8 fixtures across 6 categories** (debugging, feature,
+refactoring, performance, migration, test-generation) makes EEP's per-category / per-complexity
+analysis meaningful, but — as predicted — did not by itself make the comparison conclusive.
 Not yet done: a *powered* comparison — more repetitions and, above all, a stronger model so the
 native baseline can solve enough tasks to be discriminating (the binding constraint is model
-strength, not fixture count). See
+strength, not fixture count — 0 of 24 L3 runs succeeded under either arm). See
 [`project-memory-bank/20-next-actions.md`](project-memory-bank/20-next-actions.md) for the full
 backlog.
 
