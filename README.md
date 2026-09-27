@@ -15,10 +15,19 @@ engineering tasks, capturing full traces and producing reproducible, falsifiable
 
 ## Status
 
+**What EEP has found so far — reported honestly.** A live comparison has been run over the full
+widened fixture set (8 real fixtures × `native` baseline vs. `+ECC` × 3 reps = **48 runs**, local
+`qwen2.5-coder:7b`), and the result is **statistically inconclusive**: a negligible overall effect,
+overlapping 95% confidence intervals, a direction that flips between runs, and **0 of 24
+hardest-tier runs solved by either arm**. That points at *model strength* — not the context
+tooling — as the binding constraint, and it is surfaced as a finding rather than buried, because
+EEP is a scientific instrument first. Full numbers:
+[`docs/BENCHMARK.md`](docs/BENCHMARK.md#first-results-widened-live-comparison).
+
 Phase 13 of 13 complete — see
 [`project-memory-bank/19-phase-status.md`](project-memory-bank/19-phase-status.md) for the
 per-phase ledger and [`project-memory-bank/13-roadmap.md`](project-memory-bank/13-roadmap.md) for
-the full roadmap. **353 tests passing across 89 files** (verified 2026-09-27: `npm test`).
+the full roadmap. **357 tests passing across 89 files** (verified 2026-09-27: `npm test`).
 
 Built and working: the evaluation contract and 14-entity domain model, a 30-task benchmark (3
 with real fixture code and pinned commits), an isolated experiment harness, deterministic
@@ -35,12 +44,7 @@ newbie quickstart guide, two "golden example" benchmark-task deep-dives, and a 5
 (see [Requirements and quickstart](#requirements-and-quickstart),
 [Golden examples](#golden-examples), and [Blog series](#blog-series) below).
 
-A **live** comparison has now been run over the full widened fixture set (local `qwen2.5-coder:7b`,
-`native` vs `ecc` over all **8 real-fixture tasks**, 3 repetitions — 48 runs) — see
-[`docs/BENCHMARK.md`](docs/BENCHMARK.md#first-results-widened-live-comparison). Its result is
-deliberately reported as *statistically inconclusive* (negligible overall effect, overlapping
-confidence intervals, and a direction that flips between runs); it validates the live pipeline
-end-to-end and the per-category analysis surface rather than answering whether ECC helps. This
+The live result above validates the pipeline end-to-end and the per-category analysis surface, and
 supersedes the earlier n = 3, 3-fixture pilot.
 
 Widening the runnable set from 3 to **8 fixtures across 6 categories** (debugging, feature,

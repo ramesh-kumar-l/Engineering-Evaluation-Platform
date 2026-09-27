@@ -1,7 +1,7 @@
 {
-  "name": "eep",
-  "version": "0.1.0",
-  "private": true,
+  "name": "@rkinfra/engineering-evaluation-platform",
+  "version": "0.3.2",
+  "private": false,
   "description": "Engineering Evaluation Platform — reproducible evaluation infrastructure for AI-assisted software engineering.",
   "type": "module",
   "engines": {
