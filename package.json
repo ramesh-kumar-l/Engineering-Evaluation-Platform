@@ -5,7 +5,7 @@
   "description": "Engineering Evaluation Platform — reproducible evaluation infrastructure for AI-assisted software engineering.",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=20.6"
   },
   "license": "Apache-2.0",
   "scripts": {
@@ -13,7 +13,7 @@
     "test": "vitest run",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "experiment:run": "npm run build && node dist/experiments/runComparisonExperiment.js",
+    "experiment:run": "npm run build && node --env-file=.env dist/experiments/runComparisonExperiment.js",
     "experiment:analyze": "npm run build && node dist/experiments/analyzeComparisonResults.js",
     "report:generate": "npm run build && node dist/experiments/generateReport.js",
     "dashboard:generate": "npm run build && node dist/experiments/generateDashboard.js",
@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",
+    "@types/cross-spawn": "^6.0.6",
     "@types/node": "^22.9.0",
     "eslint": "^9.13.0",
     "prettier": "^3.3.3",
@@ -31,6 +32,7 @@
     "vitest": "^5.0.0"
   },
   "dependencies": {
+    "cross-spawn": "^7.0.6",
     "zod": "^4.6.4"
   }
 }

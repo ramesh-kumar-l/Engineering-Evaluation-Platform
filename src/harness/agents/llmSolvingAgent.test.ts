@@ -26,10 +26,12 @@ class ScriptedLlmClient implements LlmClient {
   readonly providerLabel = 'scripted';
   readonly model = 'scripted-model';
   callCount = 0;
+  readonly requests: LlmCompletionRequest[] = [];
 
   constructor(private readonly script: readonly (LlmCompletionResult | Error)[]) {}
 
-  complete(_request: LlmCompletionRequest): Promise<LlmCompletionResult> {
+  complete(request: LlmCompletionRequest): Promise<LlmCompletionResult> {
+    this.requests.push(request);
     const next = this.script[this.callCount];
     this.callCount++;
     if (next === undefined) throw new Error('ScriptedLlmClient script exhausted');
@@ -69,6 +71,38 @@ describe('LlmSolvingAgent', () => {
     expect(result.actions[0]?.type).toBe('file-read');
     expect(result.actions[0]?.target).toBe('a.js');
     expect(client.callCount).toBe(2);
+  });
+
+  it.each([
+    [
+      'inline prose',
+      'I will inspect the file first.\n\n1. Read the file.\n    {"name":"read_file","arguments":{"path":"a.js"}}',
+    ],
+    [
+      'a fenced block',
+      'I will inspect the file first.\n\n```json\n{"name":"read_file","arguments":{"path":"a.js"}}\n```',
+    ],
+    [
+      'inline prose after a code example',
+      'Example:\n```javascript\nfunction paginate() {\n  const bounds = { end: 3 };\n}\nmodule.exports = { paginate };\n```\nRead the file:\n{"name":"read_file","arguments":{"path":"a.js"}}',
+    ],
+  ])('executes a recognized tool call in %s', async (_format, content) => {
+    const client = new ScriptedLlmClient([
+      { role: 'assistant', content, toolCalls: [] },
+      { role: 'assistant', content: 'Done.', toolCalls: [] },
+    ]);
+    const agent = new LlmSolvingAgent({ client });
+    const result = await agent.run({ runId: 'run-1', task, repositoryPath: freshWorkspace() });
+
+    expect(result.status).toBe('SUCCESS');
+    expect(result.actions).toHaveLength(1);
+    expect(result.actions[0]?.target).toBe('a.js');
+    expect(result.actions[0]?.detail).toContain('// placeholder');
+    expect(client.requests[1]?.messages[1]).toMatchObject({
+      role: 'assistant',
+      content: '',
+      toolCalls: [{ name: 'read_file', arguments: { path: 'a.js' } }],
+    });
   });
 
   it('reports INCOMPLETE when the max-turn budget is exhausted without concluding', async () => {

@@ -6,8 +6,10 @@ import type { Task } from '../domain/task/task.schema.js';
 import { executeEvaluatedRun } from '../evaluation/evaluateRun.js';
 import { LlmSolvingAgent } from '../harness/agents/llmSolvingAgent.js';
 import { createLlmClient, type LlmProviderConfig } from '../harness/llm/createLlmClient.js';
+import type { EccCliInvokerOptions } from '../harness/providers/eccCliInvoker.js';
 import { computeRunMetrics } from '../metrics/computeMetrics.js';
 import { buildExperimentConditions, type ExperimentConditionEntry } from './experimentConditions.js';
+import { experimentSelectionFromEnv } from './experimentSelectionFromEnv.js';
 import { agentBudgetConfigFromEnv, llmProviderConfigFromEnv } from './llmProviderConfigFromEnv.js';
 import { writeRunResult } from './resultsWriter.js';
 
@@ -31,6 +33,15 @@ export interface RunComparisonExperimentOptions {
    * the existing, unchanged behavior (resolve from `EEP_LLM_*` environment variables).
    */
   readonly llmProviderConfig?: LlmProviderConfig;
+  /** Optional ECC CLI configuration for programmatic runs and deterministic tests. */
+  readonly eccCliInvokerOptions?: EccCliInvokerOptions;
+  /**
+   * Restricts the run to a subset of the conditions from `buildExperimentConditions()`, by name
+   * (`"native"`, `"ecc"`, `"ecc-ablated:<component>"`). Omit to run all 9. Used for cost control on
+   * a first paid live run (e.g. just `["native", "ecc"]`); unknown names throw rather than run a
+   * partial, misleading comparison.
+   */
+  readonly conditionNames?: readonly string[];
 }
 
 export interface RunComparisonExperimentResult {
@@ -64,7 +75,10 @@ export async function runComparisonExperiment(
 
   const client = createLlmClient(options.llmProviderConfig ?? llmProviderConfigFromEnv());
   const agent = new LlmSolvingAgent({ client, ...agentBudgetConfigFromEnv() });
-  const conditions = buildExperimentConditions();
+  const conditions = selectConditions(
+    buildExperimentConditions(options.eccCliInvokerOptions),
+    options.conditionNames,
+  );
   const experimentId = generateId<'ExperimentId'>('experiment');
 
   let runCount = 0;
@@ -78,6 +92,27 @@ export async function runComparisonExperiment(
   }
 
   return { experimentId, runCount };
+}
+
+/**
+ * Returns the conditions to run: all of them when `names` is undefined, or exactly the named subset
+ * otherwise. Throws on any name absent from `buildExperimentConditions()` (listing the valid names)
+ * so a typo can never silently shrink the comparison to a partial, misleading result.
+ */
+function selectConditions(
+  all: readonly ExperimentConditionEntry[],
+  names: readonly string[] | undefined,
+): ExperimentConditionEntry[] {
+  if (names === undefined) return [...all];
+  const known = new Set(all.map((entry) => entry.condition.name));
+  const missing = names.filter((name) => !known.has(name));
+  if (missing.length > 0) {
+    throw new Error(
+      `Unknown condition name(s): ${missing.join(', ')}. Valid conditions: ${[...known].join(', ')}.`,
+    );
+  }
+  const wanted = new Set(names);
+  return all.filter((entry) => wanted.has(entry.condition.name));
 }
 
 async function runOneEvaluatedCase(
@@ -133,7 +168,7 @@ async function runOneEvaluatedCase(
 
 const isMainModule = process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMainModule) {
-  runComparisonExperiment()
+  runComparisonExperiment(experimentSelectionFromEnv())
     .then(({ experimentId, runCount }) => {
       console.log(`Wrote ${String(runCount)} run(s) for experiment ${experimentId} to experiment-results/${experimentId}/`);
     })

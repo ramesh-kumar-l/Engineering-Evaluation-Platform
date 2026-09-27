@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import crossSpawn from 'cross-spawn';
 
 const DEFAULT_COMMAND = 'ecc';
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -44,9 +44,8 @@ export interface EccCliInvoker {
  * project-memory-bank/00-project-charter.md's repository boundary rule. Never imports ECC
  * source; which command actually runs is fully configurable so a deployment can point at a
  * global `ecc` link or `node <path-to-ecc-checkout>/dist/cli/index.js` without any EEP code
- * change. Uses array-argument `execFile` (never shell string interpolation), matching ECC's own
- * documented security posture, so a task description containing shell metacharacters can never
- * be interpreted as a second command.
+ * change. Uses cross-spawn's argument escaping for Windows command shims, so a task description
+ * containing shell metacharacters remains one argument rather than becoming a second command.
  */
 export class ProcessEccCliInvoker implements EccCliInvoker {
   private readonly command: string;
@@ -74,28 +73,65 @@ export class ProcessEccCliInvoker implements EccCliInvoker {
     ];
 
     return new Promise((resolvePromise, reject) => {
-      execFile(
-        this.command,
-        args,
-        { timeout: this.timeoutMs, maxBuffer: this.maxBufferBytes, windowsHide: true },
-        (error, stdout, stderr) => {
-          if (error) {
-            if (error.killed || error.signal) {
-              reject(new EccTimeoutError(`ECC CLI exceeded ${String(this.timeoutMs)}ms`));
-              return;
-            }
-            reject(
-              new EccInvocationError(
-                `ECC CLI invocation failed: ${error.message}` +
-                  (stderr ? ` (stderr: ${stderr.slice(0, 2000)})` : ''),
-                error,
-              ),
-            );
-            return;
-          }
-          resolvePromise(stdout);
-        },
-      );
+      const child = crossSpawn(this.command, args, { windowsHide: true });
+      let stdout = '';
+      let stderr = '';
+      let stdoutBytes = 0;
+      let stderrBytes = 0;
+      let settled = false;
+
+      const finish = (error?: Error, output?: string): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        if (error) reject(error);
+        else resolvePromise(output ?? '');
+      };
+
+      const timeout = setTimeout(() => {
+        child.kill();
+        finish(new EccTimeoutError(`ECC CLI exceeded ${String(this.timeoutMs)}ms`));
+      }, this.timeoutMs);
+
+      child.stdout?.on('data', (chunk: Buffer | string) => {
+        const text = chunk.toString();
+        stdoutBytes += Buffer.byteLength(text, 'utf-8');
+        if (stdoutBytes > this.maxBufferBytes) {
+          child.kill();
+          finish(new EccInvocationError(`ECC CLI stdout exceeded ${String(this.maxBufferBytes)} bytes`));
+          return;
+        }
+        stdout += text;
+      });
+
+      child.stderr?.on('data', (chunk: Buffer | string) => {
+        const text = chunk.toString();
+        stderrBytes += Buffer.byteLength(text, 'utf-8');
+        if (stderrBytes > this.maxBufferBytes) {
+          child.kill();
+          finish(new EccInvocationError(`ECC CLI stderr exceeded ${String(this.maxBufferBytes)} bytes`));
+          return;
+        }
+        stderr += text;
+      });
+
+      child.on('error', (error: Error) => {
+        finish(new EccInvocationError(`ECC CLI invocation failed: ${error.message}`, error));
+      });
+
+      child.on('close', (code, signal) => {
+        if (settled) return;
+        if (code === 0) {
+          finish(undefined, stdout);
+          return;
+        }
+        finish(
+          new EccInvocationError(
+            `ECC CLI invocation failed: ${signal ? `terminated by ${signal}` : `exited with code ${String(code)}`}` +
+              (stderr ? ` (stderr: ${stderr.slice(0, 2000)})` : ''),
+          ),
+        );
+      });
     });
   }
 }

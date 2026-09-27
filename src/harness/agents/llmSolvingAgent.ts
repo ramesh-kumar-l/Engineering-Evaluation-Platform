@@ -2,7 +2,7 @@ import { generateId } from '../../domain/common/idGenerator.js';
 import type { Agent, AgentRunRequest, AgentRunResult } from '../../domain/providers/agent.js';
 import type { Action, ActionType } from '../../domain/trace/action.schema.js';
 import type { Decision } from '../../domain/trace/decision.schema.js';
-import type { LlmClient, LlmMessage } from '../llm/llmClient.types.js';
+import type { LlmClient, LlmMessage, LlmToolCall } from '../llm/llmClient.types.js';
 import { executeAgentTool, LLM_AGENT_TOOLS } from './llmAgentTools.js';
 import { buildInitialUserMessage, buildSystemPrompt } from './promptBuilder.js';
 
@@ -39,6 +39,81 @@ function actionTypeForTool(toolName: string): ActionType {
     default:
       return 'tool-call';
   }
+}
+
+function extractJsonObjects(content: string): string[] {
+  const objects: string[] = [];
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < content.length; index++) {
+    const character = content[index];
+    if (start === -1) {
+      if (character === '{') {
+        start = index;
+        depth = 1;
+      }
+      continue;
+    }
+
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (character === '\\') escaped = true;
+      else if (character === '"') inString = false;
+      continue;
+    }
+
+    if (character === '"') inString = true;
+    else if (character === '{') depth++;
+    else if (character === '}') {
+      depth--;
+      if (depth === 0) {
+        objects.push(content.slice(start, index + 1));
+        start = -1;
+      }
+    }
+  }
+
+  return objects;
+}
+
+function parseTextToolCall(content: string, turn: number): LlmToolCall | undefined {
+  const candidates = [
+    content.trim(),
+    ...Array.from(content.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi), (match) => match[1]?.trim() ?? ''),
+    ...extractJsonObjects(content),
+  ];
+
+  for (const candidateContent of candidates) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(candidateContent);
+    } catch {
+      continue;
+    }
+
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) continue;
+    const candidate = parsed as Record<string, unknown>;
+    if (
+      typeof candidate.name !== 'string' ||
+      !LLM_AGENT_TOOLS.some((tool) => tool.name === candidate.name) ||
+      typeof candidate.arguments !== 'object' ||
+      candidate.arguments === null ||
+      Array.isArray(candidate.arguments)
+    ) {
+      continue;
+    }
+
+    return {
+      id: `text-tool-${String(turn)}`,
+      name: candidate.name,
+      arguments: candidate.arguments as Record<string, unknown>,
+    };
+  }
+
+  return undefined;
 }
 
 /**
@@ -111,9 +186,16 @@ export class LlmSolvingAgent implements Agent {
         return { status: 'AGENT_FAILURE', actions, decisions };
       }
 
-      messages.push({ role: 'assistant', content: completion.content, toolCalls: completion.toolCalls });
+      const textToolCall =
+        completion.toolCalls.length === 0 ? parseTextToolCall(completion.content, turn) : undefined;
+      const toolCalls = completion.toolCalls.length > 0 ? completion.toolCalls : textToolCall ? [textToolCall] : [];
+      messages.push({
+        role: 'assistant',
+        content: textToolCall ? '' : completion.content,
+        toolCalls,
+      });
 
-      if (completion.toolCalls.length === 0) {
+      if (toolCalls.length === 0) {
         recordDecision(
           'Concluded the task without further tool calls.',
           completion.content || undefined,
@@ -121,7 +203,7 @@ export class LlmSolvingAgent implements Agent {
         return { status: 'SUCCESS', actions, decisions };
       }
 
-      for (const call of completion.toolCalls) {
+      for (const call of toolCalls) {
         const timestamp = new Date().toISOString();
         const result = await executeAgentTool(request.repositoryPath, call.name, call.arguments);
 

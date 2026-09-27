@@ -1,6 +1,6 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { EccInvocationError, EccTimeoutError, ProcessEccCliInvoker } from './eccCliInvoker.js';
 
@@ -14,6 +14,12 @@ function writeFakeCli(script: string): string {
   const scriptPath = join(dir, 'fake-ecc.js');
   writeFileSync(scriptPath, script, 'utf-8');
   return scriptPath;
+}
+
+function writeFakeWindowsCli(scriptPath: string): string {
+  const commandPath = join(dirname(scriptPath), 'fake-ecc.cmd');
+  writeFileSync(commandPath, `@echo off\r\n"${process.execPath}" "${scriptPath}" %*\r\n`, 'utf-8');
+  return commandPath;
 }
 
 describe('ProcessEccCliInvoker', () => {
@@ -77,4 +83,18 @@ describe('ProcessEccCliInvoker', () => {
 
     expect(argv).toContain('rm -rf / ; echo pwned');
   });
+
+  it.runIf(process.platform === 'win32')(
+    'launches a Windows command shim and preserves shell metacharacters as argument data',
+    async () => {
+      const scriptPath = writeFakeCli(`console.log(JSON.stringify(process.argv.slice(2)));`);
+      const commandPath = writeFakeWindowsCli(scriptPath);
+      const invoker = new ProcessEccCliInvoker({ command: commandPath });
+
+      const stdout = await invoker.invoke(tmpdir(), 'explain this ; echo should-not-run');
+      const argv: string[] = JSON.parse(stdout) as string[];
+
+      expect(argv).toEqual(['context', 'explain this ; echo should-not-run', '--path', tmpdir()]);
+    },
+  );
 });
