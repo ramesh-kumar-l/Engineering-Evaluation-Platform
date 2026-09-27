@@ -18,7 +18,7 @@ engineering tasks, capturing full traces and producing reproducible, falsifiable
 Phase 13 of 13 complete — see
 [`project-memory-bank/19-phase-status.md`](project-memory-bank/19-phase-status.md) for the
 per-phase ledger and [`project-memory-bank/13-roadmap.md`](project-memory-bank/13-roadmap.md) for
-the full roadmap. **335 tests passing across 87 files** (verified 2026-09-22: `npm test`).
+the full roadmap. **353 tests passing across 89 files** (verified 2026-09-27: `npm test`).
 
 Built and working: the evaluation contract and 14-entity domain model, a 30-task benchmark (3
 with real fixture code and pinned commits), an isolated experiment harness, deterministic
@@ -35,10 +35,14 @@ newbie quickstart guide, two "golden example" benchmark-task deep-dives, and a 5
 (see [Requirements and quickstart](#requirements-and-quickstart),
 [Golden examples](#golden-examples), and [Blog series](#blog-series) below).
 
-Not yet done: executing a live comparison run against a real, paid LLM backend (the mechanism is
-built and verified end-to-end — including against genuinely-executed, not just synthetic, data via
-`npm run reproduce:smoke` — but running it with a real LLM actually attempting each task needs the
-user's own API key or local model and an explicit `npm run experiment:run`). See
+A first **live** comparison pilot has now been run (local `qwen2.5-coder:7b`, `native` vs `ecc` over
+the 3 real-fixture tasks) — see [`docs/BENCHMARK.md`](docs/BENCHMARK.md#first-results-pilot). It is a
+small, zero-cost pilot whose result is deliberately reported as *statistically inconclusive* (n = 3,
+weak model, overlapping confidence intervals); it validates the live pipeline end-to-end rather than
+answering whether ECC helps.
+
+Not yet done: a *powered* comparison — more repetitions, a stronger model so the native baseline can
+solve enough tasks to be discriminating, and more real fixtures beyond the current 3. See
 [`project-memory-bank/20-next-actions.md`](project-memory-bank/20-next-actions.md) for the full
 backlog.
 

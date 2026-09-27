@@ -1,9 +1,54 @@
 # The EEP Benchmark
 
-**No live comparison run has been executed yet.** Everything in this repository today — including
-[`docs/sample-dashboard.html`](sample-dashboard.html) — is either an automated-test fixture or an
-explicitly-labeled synthetic demo. This document describes the benchmark's *design*, not a
-published result. See [REPRODUCING.md](REPRODUCING.md) for how to run it yourself and change that.
+**A first live comparison run has now been executed — see [First results (pilot)](#first-results-pilot)
+below.** It is a deliberately small, local, zero-cost pilot (a 7B local model over the 3
+real-fixture tasks), and its headline finding is that *the result is statistically inconclusive at
+this sample size and model strength* — reported here exactly as measured. This document describes
+the benchmark's *design* and the pilot. Remaining artifacts that are not live results — e.g.
+[`docs/sample-dashboard.html`](sample-dashboard.html) — stay explicitly labeled as synthetic demos.
+See [REPRODUCING.md](REPRODUCING.md) to run it yourself.
+
+## First results (pilot)
+
+*Run 2026-09-27. Backend: `qwen2.5-coder:7b` via a local Ollama OpenAI-compatible endpoint (free,
+offline). Scope: the 3 real-fixture tasks, `native` vs full `ecc`, 1 repetition each (n = 3 runs
+per condition). This is a pilot to validate the live pipeline end-to-end, **not** a powered
+comparison.*
+
+**Per-run outcomes:**
+
+| Task | `native` | `ecc` |
+|---|---|---|
+| `debugging-01` (L1) | ✅ success | ❌ failure |
+| `feature-01` | ❌ failure | ❌ failure |
+| `refactoring-01` | ❌ failure | ❌ failure |
+
+**Aggregate (95% confidence intervals, baseline = `native`):**
+
+| Metric | `native` (n=3) | `ecc` (n=3) | Mean diff | Effect size |
+|---|---|---|---|---|
+| task-success | 0.333 `[0.061, 0.792]` | 0.000 `[0.000, 0.561]` | −0.333 | −1.23 (large) |
+| context-efficiency (success/1k tokens) | 2.80 | 0.00 | −2.80 | −0.82 (large) |
+
+**Interpretation — read this carefully, because the effect-size labels are misleading on their own:**
+
+1. **The comparison is statistically inconclusive.** Although the effect sizes are nominally
+   "large," the task-success confidence intervals overlap substantially (`native` `[0.061, 0.792]`
+   vs `ecc` `[0.000, 0.561]`). At n = 3 with a weak model, no reliable native-vs-ECC conclusion can
+   be drawn — and the platform reports it as such rather than headlining the effect size.
+2. **The model is the binding constraint, not ECC.** A 7B local model solved at most 1 of 3 tasks.
+   With a ceiling that low the experiment cannot discriminate context quality either way; ECC's
+   value is expected to appear on harder tasks that the native baseline *cannot* solve unaided.
+3. **Run-to-run nondeterminism is real and large.** An earlier isolated single run had `ecc`
+   *pass* `debugging-01`; this run had `ecc` *fail* the same task under identical configuration.
+   Same task, same condition, opposite outcome — which is precisely why this benchmark's design
+   centers on repetitions and confidence intervals rather than single runs.
+
+**What this pilot does and does not establish.** It establishes that the full live pipeline
+(harness → real LLM agent → deterministic verification → metrics → statistics) runs end-to-end
+against a real model and produces traceable, honestly-reported numbers. It does **not** establish
+whether ECC improves outcomes; that requires more repetitions and a stronger model (see
+[Current status](#current-status)).
 
 ## What this measures
 
@@ -113,10 +158,17 @@ with no shared code — EEP never modifies ECC's source or behavior to influence
 
 ## Current status
 
-No live comparison run against a real, paid LLM has been executed. The mechanism above is fully
-implemented and tested against synthetic fixtures, and has also been verified end-to-end against
-the real harness/verifier/metrics/reporting pipeline via a free, deterministic "smoke reproduction"
-(`npm run reproduce:smoke` — see [REPRODUCING.md](REPRODUCING.md#step-0-free-smoke-reproduction-start-here)),
-which proves the pipeline mechanics reproduce identically across machines without spending any
-money. Running the mechanism for real, with an LLM actually attempting each task, requires a
-maintainer or reproducer's own LLM credentials — see [REPRODUCING.md](REPRODUCING.md).
+A first **live** pilot has been run against a real model (local `qwen2.5-coder:7b`) — see
+[First results (pilot)](#first-results-pilot). It is intentionally small (3 tasks, n = 3 per
+condition) and its outcome is statistically inconclusive; it validates the live pipeline rather than
+answering whether ECC helps.
+
+Still to do for a *powered* result: (1) more repetitions per task for tighter confidence intervals;
+(2) a stronger model (a capable hosted LLM, or a larger local one) so the native baseline can solve
+enough tasks to make the comparison discriminating; (3) more real fixtures beyond the current 3.
+
+The mechanism remains fully reproducible without any spend via the free, deterministic "smoke
+reproduction" (`npm run reproduce:smoke` — see
+[REPRODUCING.md](REPRODUCING.md#step-0-free-smoke-reproduction-start-here)), which proves the
+pipeline mechanics reproduce identically across machines. Reproducing the live pilot needs your own
+local model or API key and `npm run experiment:run` — see [REPRODUCING.md](REPRODUCING.md).

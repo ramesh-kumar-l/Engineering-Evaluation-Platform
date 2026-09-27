@@ -956,3 +956,54 @@ Format: Decision / Context / Options / Chosen approach / Reason / Trade-offs / C
   unverified against a real GitHub-hosted execution until pushed — flagged explicitly, not silently
   assumed working.
 - **Status:** Accepted.
+
+## ADR-019: Accept `cross-spawn` as a runtime dependency for Windows `.cmd`-shim invocation of the ECC CLI; and recognize text-embedded tool calls in the solving agent
+
+- **Context:** Bringing up the first live comparison run on Windows (local `qwen2.5-coder:7b` via
+  Ollama) surfaced two concrete runtime failures that no synthetic test had exercised. (1) The ECC
+  CLI, when installed via `npm link`, is reachable only as a Windows command shim (`ecc.cmd`).
+  Node's `child_process.execFile` — what `ProcessEccCliInvoker` used (ADR-013's CLI-boundary
+  integration) — cannot launch a `.cmd` on Windows without a shell, and using a shell would reopen
+  the argument-injection risk the array-argument `execFile` was specifically chosen to avoid. (2)
+  The local model does not emit OpenAI-style structured `tool_calls`; it returns the intended tool
+  call as JSON in the assistant's text content (bare, inline after prose, or in a ```json fence),
+  so `LlmSolvingAgent` saw zero tool calls and concluded at turn 1 without ever acting.
+- **Options considered (Windows shim):** (a) `execFile` with `shell: true` — reintroduces shell
+  metacharacter interpretation of the task description; rejected on security grounds
+  ([[11-security]]). (b) Detect `.cmd`/`.bat` and special-case `cmd.exe /c` ourselves — zero new
+  dependency, but re-implements exactly the quoting/escaping edge cases `cross-spawn` already
+  handles correctly, and is easy to get subtly wrong. (c) Avoid the shim entirely by configuring the
+  invoker with `command: "node"`, `commandArgs: ["<ecc>/dist/cli/index.js"]` — zero-dependency and
+  cross-platform, but requires every operator to know and wire the ECC checkout's dist path, and the
+  path is not currently env-configurable. (d) Add `cross-spawn` and route the subprocess through it.
+- **Chosen approach:** (d). `eccCliInvoker.ts` now launches via `cross-spawn` with manual
+  stdout/stderr accumulation that preserves the previous timeout and max-buffer guards and the
+  array-argument (never shell-string) safety. For the tool-call issue, `llmSolvingAgent.ts` gains a
+  fallback that, only when the client returns no structured `toolCalls`, scans the completion text
+  for a JSON object whose `name` matches an allow-listed tool in `LLM_AGENT_TOOLS` and whose
+  `arguments` is an object, via a balanced-brace scanner plus fenced-block extraction.
+- **Reason:** `cross-spawn` is the de-facto standard remedy for this exact Node-on-Windows shim
+  limitation — small, single-purpose, widely audited — and (d) keeps the ECC CLI reachable by its
+  documented default name (`ecc`) with no per-operator path wiring, while (b) would hand-roll
+  security-sensitive escaping and (c) shifts a setup burden onto every reproducer. This is a
+  deliberate, narrow exception to the project's minimal-dependency posture (previously `zod` only),
+  taken because a concrete, reproduced requirement demonstrated the need (the ADR-004/ADR-009
+  "don't add surface without a real need" test is met here, in reverse: the need is real).
+- **Trade-offs — stated honestly:** (1) This ends the "one runtime dependency" property the project
+  advertised; runtime deps are now `zod` + `cross-spawn`. That is a real reduction in the
+  dependency-hygiene signal, accepted consciously and recorded here rather than slipped in silently.
+  Option (c) remains available to anyone who wants to restore zero-runtime-deps by configuring the
+  invoker to call `node` directly. (2) The text-tool-call fallback lives in the vendor-neutral
+  `LlmSolvingAgent`, which is a mild layering compromise against ADR-013 (wire-format quirks ideally
+  belong in the client adapter, `openAiCompatibleLlmClient`); it currently recognizes only a single
+  tool call per completion and does not preserve the surrounding prose. Moving it into the adapter
+  is a documented follow-up, not done this round.
+- **Consequences:** `eccCliInvoker.ts` rewritten to use `cross-spawn` (public `EccCliInvoker`
+  interface unchanged); `llmSolvingAgent.ts` gains `extractJsonObjects`/`parseTextToolCall`;
+  `cross-spawn` added to `dependencies` and `@types/cross-spawn` to `devDependencies`; regression
+  tests added for both formats and for Windows invocation, and the comparison test switched to a
+  fake ECC CLI so it no longer depends on a live install. Validated by the first live pilot
+  ([[../docs/BENCHMARK]] "First results (pilot)") and 353 passing tests. EEP has no `DEPENDENCIES.md`;
+  the runtime-dependency set is documented by `package.json`'s `dependencies` (now `zod` +
+  `cross-spawn`) and this ADR.
+- **Status:** Accepted.
